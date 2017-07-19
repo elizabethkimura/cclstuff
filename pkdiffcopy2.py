@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, send_file
 import pandas as pd
 from bokeh.embed import components
 import matplotlib.pyplot as plt
@@ -9,7 +9,7 @@ from bokeh.models.widgets import Slider
 from bokeh.plotting import figure, curdoc, show
 from bokeh.charts import HeatMap
 import numpy as np
-import pdb
+import io
 
 app = Flask(__name__)
 
@@ -83,8 +83,8 @@ def create_figure(current_feature_name):
     p2.circle(classKLinNonPre, abs(cclPkLinNonpre - classPLinNonPre), size = 5, fill_color = "white")
 
     return p, p2
-def create_figure2():#current_feature_name):
-
+def create_figure2(summary):#current_feature_name):
+    #print("hello")
 
 
 #This program's aim is to look at each trial and find the places where the validity fails
@@ -121,6 +121,7 @@ def create_figure2():#current_feature_name):
 
     data = np.genfromtxt('../parameters/par_stan.txt', dtype='str', skip_header=1)
     #data = np.loadtxt('../parameters/par_stan.txt', dtype='str', skiprows=1)
+    #print(data)
 
 #Gets the trial number into an arr
     trial_arr = 1 #data[:,0]
@@ -128,7 +129,7 @@ def create_figure2():#current_feature_name):
 #Iterates over the trial #
     i = trial_arr
     #trial = data[i,0]
-    trial = "00001"
+    trial = "00099"
     #print ("Performing trial %s" %trial)
 
     z_vals = ['1','2','3','4','5','6']
@@ -140,7 +141,7 @@ def create_figure2():#current_feature_name):
     sum_lin_ll = []
     for j in range(len(z_vals)):
         #z_val = z_vals[j]
-        z_val = 2
+        z_val = 6
         z_path = '_z%s.dat' %z_val
         #print ("Performing z_val = " ), z_val
 		#For ease in iterating over different z valus we use string manipulation
@@ -150,6 +151,7 @@ def create_figure2():#current_feature_name):
 
 		#calls the data
         stats_lin_data = np.loadtxt(stats_lin_path, skiprows=1)
+        #print(stats_lin_data)
         stats_lin_k = stats_lin_data[:,0]
         stats_lin_err = stats_lin_data[:,1]
 		#Create arrays that will be used to fill the complete summary arrays
@@ -194,8 +196,9 @@ def create_figure2():#current_feature_name):
             sum_lin_z = np.append(sum_lin_z, np.sum(aux_err_ultra))
             sum_lin_z = np.append(sum_lin_z, np.sum(aux_err_lin))
             sum_lin_z = np.append(sum_lin_z, np.sum(aux_err_quasi))
-
-
+            #print(sum_lin_z_ll)
+            #print("\n")
+            #print(sum_lin_z)
 		#If you want list of lists
             sum_lin_ll.append(sum_lin_z_ll)
 
@@ -215,6 +218,7 @@ def create_figure2():#current_feature_name):
         z_full = np.full(len(sum_lin_ll[0]), z_arr[j])
         z = np.append(z,z_full)
         z_ll.append(z_full)
+
 	#Generate an array of the midpoints of the bins
     ultra_scale_bin = (ultra_scale_max + ultra_scale_min)/2
     lin_scale_bin = (lin_scale_max + lin_scale_min)/2
@@ -228,6 +232,16 @@ def create_figure2():#current_feature_name):
 	#WORKS!!!! AND it fills the whole space. FUCKING LIT
     k_words = ['Ultra-large', 'Linear', 'Quasi Lin']
 	#Use pandas to generate a data frame
+    #df = pd.DataFrame(sum_lin_ll, index=z_arr, columns=k_words)
+
+	#Values greater than threshold will be red, values at 0 will be green
+	#and values in between will be gradient of orange
+
+	#Failed here
+	#cmap, norm = mcolors.from_levels_and_colors([thres,100], ['red'])
+    #print(sum_lin_z_ll)
+
+    #print(sum_lin_z)
     df = pd.DataFrame(sum_lin_ll, index=z_arr, columns=k_words)
 
 	#Values greater than threshold will be red, values at 0 will be green
@@ -236,31 +250,26 @@ def create_figure2():#current_feature_name):
 	#Failed here
 	#cmap, norm = mcolors.from_levels_and_colors([thres,100], ['red'])
 
-#Trying to brute force colors for me
+	#Trying to brute force colors for me
     cmap = mcolors.ListedColormap(['limegreen', 'greenyellow', 'yellow', 'gold', 'orange','red'])
     bounds = [0,int(thres / 4.), int(thres / 3.), int(thres / 2.), int(thres), int(len(stats_lin_k))]
     norm = mcolors.BoundaryNorm(bounds, cmap.N)
 
-    fig = plt.subplots()
 	#Plots the colors
-        #pc = plt.pcolor(df, cmap = cmap, norm=norm)
     pc = plt.pcolor(df, cmap = cmap, norm=norm)
-    #hm = HeatMap(df.values.tolist(), x)
 
+	#Changes the ticks
     plt.yticks(np.arange(0.5, len(df.index),1), df.index)
     plt.xticks(np.arange(0.5, len(df.columns),1), df.columns)
     plt.xlabel('Scales')
     plt.ylabel('$z$')
 
-    #Generate the color bar
+	#Generate the color bar
     cb = plt.colorbar(pc)
     cb.set_label('Num of Failures')
     plt.title('Scales vs $z$, Threshold = %d' %thres)
 
-    plt.savefig(pc)
-    pc.seek(0)
-    #Generates ap(df)
-    return #send_file(pc, mimety)
+    return plt #send_file(pc, mimety)
 
 
 
@@ -269,24 +278,31 @@ def home():
     return "Welcome to the Home Page!"
 
 # Index page
-@app.route('/kCCL')
-def index():
+@app.route('/kCCL/images/<summary>')
+def index(summary):
+    return render_template("kCCL.html", title = summary)
     # Determine the selected feature
     #current_feature_name = request.args.get("feature_name")
     #if current_feature_name == None:
      #   current_feature_name = "Matter Power Spectrum"
 
     # Create the plot
-    plot = create_figure2()
+    #plot = create_figure2()
 
     # Embed plot into HTML via Flask Render
-    script, div = components(plot)
+    #script, div = components(plot)
     #print (script)
     #print(div)
 
-    return render_template("kCCL.html", script=script, div=div)#,
+    #return render_template("kCCL.html", script=script, div=div)#,
 	   #feature_names=feature_names, current_feature_name=current_feature_name)
-
+@app.route('/kCCL/fig/<summary>')
+def fig(summary):
+    fig = create_figure2(summary)
+    img = io.BytesIO()
+    fig.savefig(img)
+    img.seek(0)
+    return send_file(img, mimetype = "image/png")
 # With debug=True, Flask server will auto-reload
 # when there are code changes
 if __name__ == '__main__':
